@@ -5,6 +5,12 @@ phases:
     commands:
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - echo Installing Trivy...
+      - apt-get install wget apt-transport-https gnupg
+      - wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -
+      - echo deb https://aquasecurity.github.io/trivy-repo/deb bionic main | tee -a /etc/apt/sources.list.d/trivy.list
+      - apt-get update
+      - apt-get install -y trivy
       - echo Logging in to Amazon ECR...
       - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/f5t0r4g8
   build:
@@ -16,6 +22,8 @@ phases:
   post_build:
     commands:
       - echo Build completed on date
+      - echo Running Trivy scan...
+      - trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed public.ecr.aws/f5t0r4g8/flaskapp:$IMAGE_TAG
       - echo Pushing the Docker image...
       - docker push public.ecr.aws/f5t0r4g8/flaskapp:$IMAGE_TAG
       - printf '[{"name":"sharma-assignment3-container","imageUri":"%s"}]' public.ecr.aws/f5t0r4g8/flaskapp:$IMAGE_TAG > imagedefinitions.json
